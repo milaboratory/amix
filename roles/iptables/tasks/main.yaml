@@ -13,8 +13,8 @@
   set_fact:
     zones: "{{ zones_new }}"
 
-- import_role:
-    name: os-vars
+- include_role:
+    name: "dbolotin.amix.os_vars"
 
 - name: Setting configs for Ubuntu or Debian
   set_fact:
