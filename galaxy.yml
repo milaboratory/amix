@@ -16,14 +16,12 @@ license:
 
 tags:
   - openvpn
-  - reverse-proxy
+  - reverse_proxy
 
 dependencies: {}
 
 repository: https://github.com/dbolotin/amix
-
-documentation: https://github.com/dbolotin/amix
-
-homepage: https://github.com/dbolotin/amix
-
 issues: https://github.com/dbolotin/amix/issues
+
+#documentation: https://github.com/dbolotin/amix
+#homepage: https://github.com/dbolotin/amix
