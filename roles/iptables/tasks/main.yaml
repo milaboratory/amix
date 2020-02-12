@@ -1,0 +1,93 @@
+---
+- name: Temp variables
+  set_fact:
+    zones_new: []
+
+- name: Inlining services_from_ports sections
+  include: services_from_ports.yaml
+  with_items: "{{ zones }}"
+  loop_control:
+    loop_var: zone
+
+- name: Replacing zones
+  set_fact:
+    zones: "{{ zones_new }}"
+
+- import_role:
+    name: os-vars
+
+- name: Setting configs for Ubuntu or Debian
+  set_fact:
+    iptables_config_path_v4: /etc/iptables/rules.v4
+    iptables_config_path_v6: /etc/iptables/rules.v6
+    iptables_services:
+      - netfilter-persistent
+    iptables_packages:
+      - iptables-persistent
+      - netfilter-persistent
+  when: is_debian_or_ubuntu
+
+- name: Setting configs for CentOS
+  set_fact:
+    iptables_config_path_v4: /etc/sysconfig/iptables
+    iptables_config_path_v6: /etc/sysconfig/ip6tables
+    iptables_services:
+      - iptables
+      - ip6tables
+    iptables_packages:
+      - iptables-services
+  when: is_centos
+
+- name: Chrcking whether FirewallD is running
+  service:
+    name: firewalld
+  register: firewalld_status
+
+- name: BackingUp iptables (to /etc/iptables.v4.backup)
+  shell: iptables-save > /etc/iptables.v4.backup
+  when: firewalld_status.status.ActiveState == 'active'
+
+- name: BackingUp iptables (to /etc/iptables.v6.backup)
+  shell: ip6tables-save > /etc/iptables.v6.backup
+  when: firewalld_status.status.ActiveState == 'active'
+
+- name: Make sure FirewallD is disabled
+  service:
+    name: firewalld
+    enabled: no
+    state: stopped
+  when: firewalld_status.status.ActiveState == 'active'
+
+- sysctl:
+    name: "{{ item }}"
+    value: 1
+    sysctl_set: yes
+    state: present
+    reload: yes
+  with_items:
+    - net.ipv4.ip_forward
+    - net.ipv6.conf.all.forwarding
+
+- name: Installing iptables
+  package:
+    name: "{{ iptables_packages }}"
+    state: present
+
+- name: Creating iptables v4 config
+  template:
+    src: templates/iptables.j2
+    dest: "{{ iptables_config_path_v4 }}"
+  notify: reload iptables
+
+- name: Creating iptables v6 config
+  template:
+    src: templates/ip6tables.j2
+    dest: "{{ iptables_config_path_v6 }}"
+  notify: reload iptables
+
+- name: Enable iptables
+  service:
+    name: "{{ item }}"
+    enabled: yes
+    state: started
+  with_items: "{{ iptables_services }}"

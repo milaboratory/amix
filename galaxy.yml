@@ -1,0 +1,29 @@
+namespace: dbolotin
+name: amix
+
+version: 0.0.1
+
+readme: README.md
+
+authors:
+  - Dmitry Bolotin <bolotin.dmitry@gmail.com>
+  - Anatoliy Mitrofanov <anatoliy@nable.ru>
+
+description: Mix of unrelated ansible roles
+
+license:
+  - Apache-2.0
+
+tags:
+  - openvpn
+  - reverse-proxy
+
+dependencies: {}
+
+repository: https://github.com/dbolotin/amix
+
+documentation: https://github.com/dbolotin/amix
+
+homepage: https://github.com/dbolotin/amix
+
+issues: https://github.com/dbolotin/amix/issues

@@ -1,0 +1,76 @@
+proto {{ proto }}
+
+{% if dev is defined %}
+dev {{ dev }}
+{% else %}
+dev {{ device_type }}
+{% endif %}
+dev-type {{ device_type }}
+
+remote {{ host }} {{ port }}
+
+resolv-retry infinite
+
+client
+tls-client
+remote-cert-tls server
+
+nobind
+
+ncp-disable
+
+persist-key
+persist-tun
+
+cipher {{ cipher }}
+
+{% if up_script is defined or down_script is defined %}
+script-security 2
+{% endif %}
+
+{% if up_script is defined %}
+up ./{{ name }}-up.sh
+{% endif %}
+
+{% if down_script is defined %}
+down ./{{ name }}-down.sh
+{% endif %}
+
+status /var/log/openvpn-{{ name }}.status
+log-append /var/log/openvpn-{{ name }}.log
+
+verb 3
+
+{% if embed_keys %}
+
+<ca>
+{{ ca_crt }}
+</ca>
+
+<cert>
+{{ config_crt }}
+</cert>
+
+<key>
+{{ config_key }}
+</key>
+
+{% if tls_auth %}
+<tls-auth>
+{{ ta_key }}
+</tls-auth>
+{% endif %}
+
+{% else %}
+
+ca {{ name }}.files/ca.crt
+
+cert {{ name }}.files/{{ name }}.crt
+
+key {{ name }}.files/{{ name }}.key
+
+{% if tls_auth %}
+tls-auth {{ name }}.files/ta.key
+{% endif %}
+
+{% endif %}

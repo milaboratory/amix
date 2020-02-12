@@ -1,0 +1,31 @@
+{% if net_with_prefix is defined %}
+ifconfig-push {{ net_with_prefix | ipaddr(client.ip_offset) | ipaddr('address') }} {{ net_with_prefix | ipaddr('netmask') }}
+{% else %}
+ifconfig-push {{ client.ip }} {{ mask }}
+{% endif %}
+
+{% if client.iroutes is defined %}
+{% for iroute in client.iroutes %}
+{% if iroute.comment is defined %}
+# {{ iroute.comment }}
+{% endif %}
+{% if iroute.net_with_prefix is defined %}
+iroute {{ iroute.net_with_prefix | ipaddr('network') }} {{ iroute.net_with_prefix | ipaddr('netmask') }}
+{% else %}
+iroute {{ iroute.net }} {{ iroute.mask }}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if client.push_routes is defined %}
+{% for push_route in client.push_routes %}
+{% if push_route.comment is defined %}
+# {{ push_route.comment }}
+{% endif %}
+{% if push_route.net_with_prefix is defined %}
+push "route {{ push_route.net_with_prefix | ipaddr('network') }} {{ push_route.net_with_prefix | ipaddr('netmask') }}"
+{% else %}
+push "route {{ push_route.net }} {{ push_route.mask }}"
+{% endif %}
+{% endfor %}
+{% endif %}

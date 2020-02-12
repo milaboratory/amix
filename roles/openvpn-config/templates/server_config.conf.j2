@@ -1,0 +1,154 @@
+proto {{ proto }}
+
+{% if dev is defined %}
+dev {{ dev }}
+{% else %}
+dev {{ device_type }}
+{% endif %}
+dev-type {{ device_type }}
+
+multihome
+
+port {{ port }}
+
+mode server
+tls-server
+remote-cert-tls client
+
+{% if device_type == "tun" %}
+topology subnet
+push "topology subnet"
+{% endif %}
+
+{% if net_with_prefix is defined %}
+ifconfig {{ net_with_prefix | ipaddr(ip_offset) | ipaddr('address') }} {{ net_with_prefix | ipaddr('netmask') }}
+{% else %}
+ifconfig {{ ip }} {{ mask }}
+{% endif %}
+{% if pool is defined %}
+{% if net_with_prefix is defined %}
+ifconfig-pool {{ net_with_prefix | ipaddr(pool.from_offset) | ipaddr('address') }} {{ net_with_prefix | ipaddr(pool.to_offset) | ipaddr('address') }}
+{% else %}
+ifconfig-pool {{ pool.from }} {{ pool.to }}
+{% endif %}
+ifconfig-pool-persist {{ name }}-ifconfig-persist {{ pool_persist_timeout }}
+{% endif %}
+
+{% if push_def1 %}
+push "redirect-gateway def1"
+{% endif %}
+
+{% if client_to_client %}
+client-to-client
+{% endif %}
+
+
+push "route-gateway {{ (net_with_prefix | ipaddr(ip_offset) | ipaddr('address')) if net_with_prefix is defined else ip }}"
+
+# Disable Negotiable Crypto Parameters (NCP)
+ncp-disable
+cipher {{ cipher }}
+
+{% if clients is defined %}
+
+# iroutes (networks available through clients)
+{% for client in clients %}
+# route through {{ client.name }}
+{% if client.iroutes is defined %}
+{% for iroute in client.iroutes %}
+{% if iroute.net_with_prefix is defined %}
+route {{ iroute.net_with_prefix | ipaddr('network') }} {{ iroute.net_with_prefix | ipaddr('netmask') }} {{ (net_with_prefix | ipaddr(client.ip_offset) | ipaddr('address')) if net_with_prefix is defined else client.ip }}
+{% else %}
+route {{ iroute.net }} {{ iroute.mask }} {{ (net_with_prefix | ipaddr(client.ip_offset) | ipaddr('address')) if net_with_prefix is defined else client.ip }}
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+client-config-dir {{ name }}-ccd
+
+{% endif %}
+
+{% if push is defined %}
+{% for push_item in push %}
+push "{{ push_item }}"
+{% endfor %}
+{% endif %}
+
+{% if push_routes is defined %}
+
+# route pushes (networks available for clients through this vpn)
+{% for push_route in push_routes %}
+{% if push_route.comment is defined %}
+# {{ push_route.comment }}
+{% endif %}
+{% if push_route.net_with_prefix is defined %}
+push "route {{ push_route.net_with_prefix | ipaddr('network') }} {{ push_route.net_with_prefix | ipaddr('netmask') }}"
+{% else %}
+push "route {{ push_route.net }} {{ push_route.mask }}"
+{% endif %}
+{% endfor %}
+
+{% endif %}
+
+keepalive {{ keepalive_ping }} {{ keepalive_timeout }}
+
+persist-key
+persist-tun
+
+{% if up_script is defined or down_script is defined %}
+script-security 2
+{% endif %}
+
+{% if up_script is defined %}
+up ./{{ name }}-up.sh
+{% endif %}
+
+{% if down_script is defined %}
+down ./{{ name }}-down.sh
+{% endif %}
+
+status /var/log/openvpn-{{ name }}.status
+log-append /var/log/openvpn-{{ name }}.log
+
+verb 3
+
+{% if embed_keys %}
+
+<ca>
+{{ ca_crt }}
+</ca>
+
+<cert>
+{{ config_crt }}
+</cert>
+
+<key>
+{{ config_key }}
+</key>
+
+{% if tls_auth %}
+<tls-auth>
+{{ ta_key }}
+</tls-auth>
+{% endif %}
+
+<dh>
+{{ dh }}
+</dh>
+
+{% else %}
+
+ca {{ name }}.files/ca.crt
+
+cert {{ name }}.files/{{ name }}.crt
+
+key {{ name }}.files/{{ name }}.key
+
+{% if tls_auth %}
+tls-auth {{ name }}.files/ta.key
+{% endif %}
+
+dh {{ name }}.files/dh.pem
+
+{% endif %}

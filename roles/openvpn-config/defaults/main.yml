@@ -1,0 +1,15 @@
+---
+keepalive_ping: 10
+keepalive_timeout: 120
+cipher: AES-128-GCM
+pool_persist_timeout: 172800
+device_type: tun
+tls_auth: yes
+push_def1: no
+no_service: no
+config_path: /etc/openvpn/
+owner: root
+group: root
+extension: conf
+client_to_client: no
+embed_keys: yes

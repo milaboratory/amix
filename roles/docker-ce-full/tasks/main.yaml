@@ -1,0 +1,87 @@
+---
+- import_role:
+    name: os-vars
+
+- name: Setting configs for Ubuntu or Debian
+  set_fact:
+    docker_cleanup_packages:
+      - docker.io
+      - docker-engine
+      - containerd
+    docker_prerequisite_packages:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - software-properties-common
+  when: is_debian_or_ubuntu
+
+- name: Setting configs for CentOS
+  set_fact:
+    docker_cleanup_packages:
+      - docker
+      - docker-client
+      - docker-client-latest
+      - docker-common
+      - docker-latest
+      - docker-latest-logrotate
+      - docker-logrotate
+      - docker-selinux
+      - docker-engine-selinux
+      - docker-engine
+    docker_prerequisite_packages:
+      - yum-utils
+      - device-mapper-persistent-data
+      - lvm2
+  when: is_centos
+
+- name: Remove previous docker installation
+  package:
+    name: "{{ docker_cleanup_packages }}"
+    state: absent
+
+- name: Install prerequisite packages
+  package:
+    name: "{{ docker_prerequisite_packages }}"
+    state: present
+
+- include: centos.yaml
+  when: is_centos
+
+- include: ubuntu.yaml
+  when: is_ubuntu
+
+- include: debian.yaml
+  when: is_debian
+
+- name: Install Docker CE
+  package:
+    update_cache: yes
+    name: docker-ce
+    state: present
+
+- name: Enable Docker CE service on startup
+  service:
+    name: docker
+    state: started
+    enabled: yes
+
+- block:
+    - name: Ensure Pip is installed.
+      package:
+        name:
+          - python3-pip
+          - python3-pkg-resources
+          - python3-setuptools
+        state: present
+
+    - name: Upgrading pip
+      pip:
+        name: pip
+        state: latest
+
+    - name: Installing latest python docker binding
+      pip:
+        name: docker-compose
+        state: latest
+
+  when: is_debian_or_ubuntu

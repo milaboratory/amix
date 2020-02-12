@@ -1,0 +1,76 @@
+*mangle
+COMMIT
+
+*nat
+
+{% if port_forwarding is defined %}
+{% for port_forward in port_forwarding %}
+{#Port forwarding#}
+-A PREROUTING --dst {{port_forward.from_ip}} -p {{port_forward.proto}} --dport {{port_forward.port}} -j DNAT --to-destination {{port_forward.to_ip}}{{ ":" ~ port_forward.to_port if "to_port" in port_forward else "" }}
+{# Access internal service from local network #}
+-A POSTROUTING --dst {{port_forward.to_ip}} -p {{port_forward.proto}} --dport {{port_forward.to_port if "to_port" in port_forward else port_forward.port}} -j SNAT --to-source {{port_forward.from_ip}}
+{# Access internal service from router #}
+-A OUTPUT --dst {{port_forward.from_ip}} -p {{port_forward.proto}} --dport {{port_forward.port}} -j DNAT --to-destination {{port_forward.to_ip}}{{ ":" ~ port_forward.to_port if "to_port" in port_forward else "" }}
+{% endfor %}
+{% endif %}
+
+{% if masqarades is defined %}
+{% for masqarade in masqarades %}
+-A POSTROUTING{{" -o " ~ masqarade.output_interface if "output_interface" in masqarade else ""}}{{" -s " ~ masqarade.from_network if "from_network" in masqarade else ""}}{{" -d " ~ masqarade.to_network if "to_network" in masqarade else ""}} -j MASQUERADE
+{% endfor %}
+{% endif %}
+COMMIT
+
+*filter
+:OUTPUT ACCEPT
+:FORWARD DROP
+:INPUT DROP
+
+{# Common rules #}
+-A INPUT -i lo -j ACCEPT
+-A INPUT -p tcp -m tcp --dport 22 -j ACCEPT
+
+:SYN_FLOOD -
+-A INPUT -p tcp --syn -j SYN_FLOOD
+-A SYN_FLOOD -m limit --limit 5/s --limit-burst 20 -j RETURN
+-A SYN_FLOOD -j DROP
+
+-A INPUT -p icmp -m icmp --icmp-type 0 -j ACCEPT
+-A INPUT -p icmp -m icmp --icmp-type 3 -j ACCEPT
+-A INPUT -p icmp -m icmp --icmp-type 8 -j ACCEPT
+-A INPUT -p icmp -m icmp --icmp-type 11 -j ACCEPT
+
+-A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+-A INPUT -m state --state INVALID -j DROP
+
+{% if port_forwarding is defined %}
+{% for port_forward in port_forwarding %}
+-I FORWARD -d {{port_forward.to_ip}} -p {{port_forward.proto}} --dport {{port_forward.port}} -j ACCEPT
+{% endfor %}
+{% endif %}
+
+{% if "forwarding_rules" in vars %}
+{% for forwarding_rule in forwarding_rules %}
+-A FORWARD{{" -i " ~ forwarding_rule.input_interface if "input_interface" in forwarding_rule else ""}}{{" -o " ~ forwarding_rule.output_interface if "output_interface" in forwarding_rule else ""}}{{" -s " ~ forwarding_rule.from_network_v4 if "from_network_v4" in forwarding_rule else ""}}{{" -d " ~ forwarding_rule.to_network_v4 if "to_network_v4" in forwarding_rule else ""}} -j {{forwarding_rule.action}}
+{% endfor %}
+{% endif %}
+
+-A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+-A FORWARD -m state --state INVALID -j DROP
+
+{% for zone in zones %}
+{% for interface in zone.interfaces %}
+{% if "services" in zone %}
+{% for service in zone.services %}
+-A INPUT -i {{ interface }} -p {{service.proto}} -m {{service.proto}} --dport {{service.port}} -j ACCEPT
+{% endfor %}
+{% endif %}
+{% if "default_politicy" in zone %}
+{{ ("-A INPUT -i " ~ interface ~ " -j " ~ zone.default_politicy.input) if "input" in zone.default_politicy else "" }} 
+{{ ("-A OUTPUT -o " ~ interface ~ " -j " ~ zone.default_politicy.output) if "output" in zone.default_politicy else "" }}
+{{ ("-A FORWARD -i " ~ interface ~ " -j " ~ zone.default_politicy.forward) if "forward" in zone.default_politicy else "" }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+
+COMMIT

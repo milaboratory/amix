@@ -1,0 +1,57 @@
+---
+- name: Create nginx certs data volume
+  docker_volume:
+    name: nginx_certs
+
+- name: Creating /var/lib/nginx/vhost.d
+  file:
+    path: /var/lib/nginx/vhost.d
+    owner: root
+    group: root
+    mode: 0755
+    state: directory
+
+- name: Creating nginx reverse proxy and letsencrypt helper
+  docker_compose:
+    project_name: web
+    definition:
+      version: "3.5"
+      services:
+        reverse_proxy:
+          image: jwilder/nginx-proxy
+          volumes:
+            - /var/lib/nginx/vhost.d:/etc/nginx/vhost.d
+            - nginx_html:/usr/share/nginx/html
+            - /var/run/docker.sock:/tmp/docker.sock:ro
+            - nginx_certs:/etc/nginx/certs:ro
+          ports:
+            - "80:80"
+            - "443:443"
+          restart: always
+          networks:
+            main:
+          labels:
+            - "com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy"
+        reverse_proxy_letsencrypt_helper:
+          image: jrcs/letsencrypt-nginx-proxy-companion
+          restart: always
+          networks:
+            main:
+          volumes:
+            - /var/lib/nginx/vhost.d:/etc/nginx/vhost.d
+            - nginx_html:/usr/share/nginx/html
+            - nginx_certs:/etc/nginx/certs:rw
+            - /var/run/docker.sock:/var/run/docker.sock:ro
+
+      networks:
+        main:
+          #          name: "{{ docker_network_name | default( 'web_main' ) }}"
+          driver: bridge
+          driver_opts:
+            com.docker.network.bridge.name: "docker-web"
+
+      volumes:
+        nginx_certs:
+          external:
+            name: nginx_certs
+        nginx_html:

@@ -1,0 +1,20 @@
+---
+- name: Actual iptables reload
+  service:
+    name: "{{ item }}"
+    state: restarted
+  with_items: "{{ iptables_services }}"
+  listen: reload iptables
+
+- name: Checking if docker exists
+  service:
+    name: docker
+  register: docker_status
+  listen: reload iptables
+
+- name: Reloading Docker
+  service:
+    name: docker
+    state: restarted
+  when: docker_status.status.ActiveState == 'active'
+  listen: reload iptables

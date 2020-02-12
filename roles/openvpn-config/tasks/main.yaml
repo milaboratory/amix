@@ -1,0 +1,159 @@
+---
+- name: Checking openvpn installed
+  package:
+    name: openvpn
+    state: present
+
+- name: Creating keys
+  import_role:
+    name: openvpn-key
+
+# Workaround for strange handler variable visibility
+- name: Saving config name for handler
+  set_fact:
+    openvpn_service_name: "{{ name }}"
+    openvpn_no_service: "{{ no_service }}"
+
+- name: Reading keys and certificates
+  set_fact:
+    config_key: "{{ lookup('file', openvpn_pki_folder + '/pki/private/' + name + '.key' ) }}"
+    config_crt: "{{ lookup('file', openvpn_pki_folder + '/pki/issued/' + name + '.crt' ) }}"
+    ca_crt: "{{ lookup('file', openvpn_pki_folder + '/pki/ca.crt') }}"
+    dh: "{{ lookup('file', openvpn_pki_folder + '/pki/dh.pem') }}"
+
+- name: Reading ta_key
+  set_fact:
+    ta_key: "{{ lookup('file', openvpn_pki_folder + '/ta.key') }}"
+  when: tls_auth
+
+- when: not embed_keys
+  block:
+    - name: Calculating files to copy (1)
+      set_fact:
+        files_to_copy:
+          - from: "{{ openvpn_pki_folder }}/pki/private/{{ name }}.key"
+            to: "{{ name }}.key"
+          - from: "{{ openvpn_pki_folder }}/pki/issued/{{ name }}.crt"
+            to: "{{ name }}.crt"
+          - from: "{{ openvpn_pki_folder }}/pki/ca.crt"
+            to: "ca.crt"
+
+    - name: Calculating files to copy (2)
+      set_fact:
+        files_to_copy_dh:
+          - from: "{{ openvpn_pki_folder }}/pki/dh.pem"
+            to: "dh.pem"
+      when: "type == 'server'"
+
+    - name: Calculating files to copy (3)
+      set_fact:
+        files_to_copy: "{{ files_to_copy }} + {{ files_to_copy_dh }}"
+      when: "type == 'server'"
+
+    - name: Calculating files to copy (4)
+      set_fact:
+        files_to_copy_ta:
+          - from: "{{ openvpn_pki_folder }}/ta.key"
+            to: "ta.key"
+      when: tls_auth
+
+    - name: Calculating files to copy (5)
+      set_fact:
+        files_to_copy: "{{ files_to_copy }} + {{ files_to_copy_ta }}"
+      when: tls_auth
+
+    - name: Creating key-file directory
+      file:
+        path:  "{{ config_path }}/{{ name }}.files"
+        owner: "{{ owner }}"
+        group: "{{ group }}"
+        mode: 0700
+        state: directory
+
+    - name: Copying key files
+      copy:
+        dest: "{{ config_path }}/{{ name }}.files/{{ file_to_copy.to }}"
+        owner: "{{ owner }}"
+        group: "{{ group }}"
+        mode: 0700
+        src: "{{ file_to_copy.from }}"
+      with_items: "{{ files_to_copy }}"
+      loop_control:
+        loop_var: file_to_copy
+      notify: restart openvpn
+
+- name: Creating openvpn config
+  template:
+    src: "{{ type }}_config.conf.j2"
+    dest: "{{ config_path }}/{{ name }}.{{ extension }}"
+    owner: "{{ owner }}"
+    group: "{{ group }}"
+    mode: 0600
+  notify: restart openvpn
+
+- name: Creating up script files
+  copy:
+    dest: "{{ config_path }}/{{ name }}-up.sh"
+    owner: "{{ owner }}"
+    group: "{{ group }}"
+    mode: 0700
+    content: "{{ up_script }}"
+  when: up_script is defined
+  notify: restart openvpn
+
+- name: Creating down script files
+  copy:
+    dest: "{{ config_path }}/{{ name }}-down.sh"
+    owner: "{{ owner }}"
+    group: "{{ group }}"
+    mode: 0700
+    content: "{{ down_script }}"
+  when: down_script is defined
+  notify: restart openvpn
+
+- name: Creating client-config directory for server config
+  block:
+    - name: Creating folder
+      file:
+        path: "{{ config_path }}/{{ name }}-ccd"
+        state: directory
+        owner: "{{ owner }}"
+        group: "{{ group }}"
+        mode: 0700
+
+    - name: Creating client configs
+      template:
+        src: "ccd.j2"
+        dest: "{{ config_path }}/{{ name }}-ccd/{{ client.name }}"
+        owner: "{{ owner }}"
+        group: "{{ group }}"
+        mode: 0600
+      with_items: "{{ clients }}"
+      loop_control:
+        loop_var: client
+      notify: restart openvpn
+  when: type == "server" and clients is defined
+
+- name: Allow OpenVPN to listen on
+  seport:
+    ports: "{{ se_port }}"
+    proto: "{{ se_proto }}"
+    setype: openvpn_port_t
+    state: present
+  when: se_port is defined and se_proto is defined
+  notify:
+    - restart openvpn
+
+- meta: flush_handlers
+
+- name: Start OpenVPN
+  service:
+    name: "openvpn@{{ name }}"
+    state: started
+  when: not no_service
+
+- name: Enabling OpenVPN connection
+  command: "systemctl enable openvpn@{{ name }}"
+  changed_when: false
+  when: not no_service
+

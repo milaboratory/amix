@@ -1,0 +1,23 @@
+---
+- name: Saving services to temp var
+  set_fact:
+    services_tmp: "{{ zone.services | default([]) }}"
+
+- when: zone.services_from_ports is defined
+  block:
+
+    - name: Inline tcp ports
+      set_fact:
+        services_tmp: "{{ services_tmp + [{'name': item.key, 'port': item.value, 'proto': 'tcp'}] }}"
+      with_dict: "{{ zone.services_from_ports.tcp }}"
+      when: zone.services_from_ports.tcp is defined
+
+    - name: Inline udp ports
+      set_fact:
+        services_tmp: "{{ services_tmp + [{'name': item.key, 'port': item.value, 'proto': 'udp'}] }}"
+      with_dict: "{{ zone.services_from_ports.udp }}"
+      when: zone.services_from_ports.udp is defined
+
+- name: Adding modified record to zones_new variable
+  set_fact:
+    zones_new: "{{ zones_new + [(zone | combine({'services': services_tmp}))] }}"

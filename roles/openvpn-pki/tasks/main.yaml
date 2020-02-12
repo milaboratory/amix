@@ -1,0 +1,40 @@
+---
+- name: "Creating folder for OpenVPN PKI"
+  file:
+    path: "{{ openvpn_pki_folder }}"
+    state: directory
+    mode: 0700
+  delegate_to: localhost
+  become: no
+
+- name: "Creating ta.key (ON LOCALHOST)"
+  command: "openvpn --genkey --secret ta.key"
+  args:
+    chdir: "{{ openvpn_pki_folder }}"
+    creates: "{{ openvpn_pki_folder }}/ta.key"
+  delegate_to: localhost
+  become: no
+
+- name: "Init PKI (ON LOCALHOST)"
+  command: "{{ openvpn_pki_folder }}/easyrsa/easyrsa init-pki"
+  args:
+    chdir: "{{ openvpn_pki_folder }}"
+    creates: "{{ openvpn_pki_folder }}/pki"
+  delegate_to: localhost
+  become: no
+
+- name: "Building CA (ON LOCALHOST)"
+  command: "{{ openvpn_pki_folder }}/easyrsa/easyrsa --batch build-ca nopass"
+  args:
+    chdir: "{{ openvpn_pki_folder }}"
+    creates: "{{ openvpn_pki_folder }}/pki/ca.crt"
+  delegate_to: localhost
+  become: no
+
+- name: "Creating dh.pem [this may take several minutes] (ON LOCALHOST)"
+  command: "{{ openvpn_pki_folder }}/easyrsa/easyrsa gen-dh"
+  args:
+    chdir: "{{ openvpn_pki_folder }}"
+    creates: "{{ openvpn_pki_folder }}/pki/dh.pem"
+  delegate_to: localhost
+  become: no

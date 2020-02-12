@@ -1,2 +1,3 @@
-# amix
-Collection of not-very-related ansible roles
+# Ansible Collection - dbolotin.amix
+
+Documentation for the collection.
