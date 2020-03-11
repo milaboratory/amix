@@ -36,7 +36,7 @@
         (target_records_formatted | default([])) +
           [{
             'Type': item.Type,
-            'TTL': item.TTL,
+            'TTL': item.TTL | default(default_ttl),
             'Name': item.Name + '.',
             'Values': ([item.Values] | flatten)
           }]
