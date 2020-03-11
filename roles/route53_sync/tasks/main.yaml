@@ -1,0 +1,101 @@
+- name: Reading hosted zones from AWS
+  route53_info:
+    aws_access_key: "{{ aws_access_key | default(omit) }}"
+    aws_secret_key: "{{ aws_secret_key | default(omit) }}"
+    query: hosted_zone
+  register: hosted_zones
+
+- name: Checking Input Parameters
+  assert:
+    that: domain is defined and domain != ''
+    fail_msg: "Please specify target domain."
+
+- name: Extracting target zone ID
+  set_fact:
+    hosted_zone_id: |-
+      {{ hosted_zones | json_query("HostedZones[?Name=='" + domain + ".'].Id" ) | join('') | regex_replace('^.*/([^/]*)$', '\1') }}
+
+- name:
+  assert:
+    that: "hosted_zone_id != ''"
+    success_msg: "HostedZoneID = '{{ hosted_zone_id }}'"
+    fail_msg: "Can't find hosted zone for domain {{ domain }}, found {{ hosted_zones | json_query('HostedZones[].Name') | join(',') }} "
+
+- name: Reading current AWS hosted zone state
+  route53_info:
+    aws_access_key: "{{ aws_access_key | default(omit) }}"
+    aws_secret_key: "{{ aws_secret_key | default(omit) }}"
+    query: record_sets
+    hosted_zone_id: "{{ hosted_zone_id }}"
+  register: current_records
+
+- name: Reformatting DNS Records (1)
+  set_fact:
+    target_records_formatted: >-
+      {{
+        (target_records_formatted | default([])) +
+          [{
+            'Type': item.Type,
+            'TTL': item.TTL,
+            'Name': item.Name + '.',
+            'Values': ([item.Values] | flatten)
+          }]
+      }}
+    target_records_set: >-
+      {{
+        (target_records_set | default([])) + [ item.Type + "|" + item.Name + '.' ]
+      }}
+  with_items: "{{ records }}"
+
+- name: Reformatting DNS Records (2)
+  set_fact:
+    current_records_formatted: "{{ current_records | to_json | from_json | json_query(\"ResourceRecordSets[?Type!='NS' && Type!='SOA'] | [].{Name: Name, Type: Type, TTL: TTL, Values: ResourceRecords[].Value}\") }}"
+    target_records_formatted: "{{ target_records_formatted | to_json | from_json }}"
+
+- set_fact:
+    records_to_update_or_create: "{{ target_records_formatted | difference(current_records_formatted)  }}"
+    records_to_delete: []
+
+- set_fact:
+    records_to_delete: "{{ records_to_delete + [record] }}"
+  with_items: "{{ current_records_formatted }}"
+  loop_control:
+    loop_var: record
+    label: "Adding {{ record.Name }} for delete"
+  when: (record.Type + "|" + record.Name) not in target_records_set
+
+- name: "Deleting records"
+  route53:
+    state: absent
+    hosted_zone_id: "{{ hosted_zone_id }}"
+    aws_access_key: "{{ aws_access_key | default(omit) }}"
+    aws_secret_key: "{{ aws_secret_key | default(omit) }}"
+    record: "{{ record.Name }}"
+    type: "{{ record.Type }}"
+    value: "{{ record.Values }}"
+    ttl: "{{ record.TTL }}"
+    wait: yes
+  with_items: "{{ records_to_delete }}"
+  loop_control:
+    loop_var: record
+    label: "{{ record.Name }} {{ record.Type }} {{ record.Values | join('|') }}"
+  when: not dry_run
+
+- name: "Adding or updating records"
+  route53:
+    state: present
+    hosted_zone_id: "{{ hosted_zone_id }}"
+    aws_access_key: "{{ aws_access_key | default(omit) }}"
+    aws_secret_key: "{{ aws_secret_key | default(omit) }}"
+    overwrite: yes
+    record: "{{ record.Name }}"
+    type: "{{ record.Type }}"
+    value: "{{ record.Values }}"
+    ttl: "{{ record.TTL }}"
+    wait: yes
+  with_items: "{{ records_to_update_or_create }}"
+  loop_control:
+    loop_var: record
+    label: "{{ record.Name }} {{ record.Type }} {{ record.Values | join('|') }}"
+  when: not dry_run
+
