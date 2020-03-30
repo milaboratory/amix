@@ -5,8 +5,8 @@
     state: present
 
 - name: Creating keys
-  import_role:
-    name: openvpn-key
+  include_role:
+    name: "dbolotin.amix.openvpn_key"
 
 # Workaround for strange handler variable visibility
 - name: Saving config name for handler

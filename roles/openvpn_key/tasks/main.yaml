@@ -1,7 +1,7 @@
 ---
 - name: PKI
-  import_role:
-    name: openvpn-pki
+  include_role:
+    name: "dbolotin.amix.openvpn_pki"
 
 - name: "Creating {{ type }} keys for common name {{ name }} (ON LOCALHOST)"
   command: "{{ openvpn_pki_folder }}/easyrsa/easyrsa build-{{ type }}-full {{ name }} nopass"
