@@ -58,7 +58,7 @@ COMMIT
 -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
 -A FORWARD -m state --state INVALID -j DROP
 
-{% for zone in zones %}
+{% for zone in zones_new %}
 {% for interface in zone.interfaces %}
 {% if "services" in zone %}
 {% for service in zone.services %}

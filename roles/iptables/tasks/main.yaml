@@ -9,10 +9,6 @@
   loop_control:
     loop_var: zone
 
-- name: Replacing zones
-  set_fact:
-    zones: "{{ zones_new }}"
-
 - include_role:
     name: "dbolotin.amix.os_vars"
 
@@ -38,7 +34,7 @@
       - iptables-services
   when: is_centos
 
-- name: Chrcking whether FirewallD is running
+- name: Checking whether FirewallD is running
   service:
     name: firewalld
   register: firewalld_status
